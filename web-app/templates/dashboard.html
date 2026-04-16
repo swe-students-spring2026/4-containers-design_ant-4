@@ -2,12 +2,6 @@
 
 {% block title %}Inventory Dashboard{% endblock %}
 
-{% block extra_head %}
-{% if pending_uploads %}
-<meta http-equiv="refresh" content="5">
-{% endif %}
-{% endblock %}
-
 {% block content %}
 {% set total_items = items|length %}
 
@@ -38,60 +32,14 @@
             </div>
         </div> -->
 
-        <a class="text-link" href="{{ url_for('main.home') }}">Back to Upload Page</a>
+        <div class="auth-link-grid">
+            <a class="text-link" href="{{ url_for('main.home') }}">Back to Upload Page</a>
+            <a class="text-link" href="{{ url_for('main.scans') }}">Open Scan Queue</a>
+        </div>
     </div>
 
     <div class="hero-number" aria-hidden="true">{{ '%02d' % total_items }}</div>
 </section>
-
-
-{% if recent_uploads %}
-<section class="status-section" aria-label="Recent scans">
-    <div class="status-band">
-        <p class="band-label">Scan Queue</p>
-        <p class="band-text">
-            {% if pending_uploads %}
-                {{ pending_uploads }} scan{{ '' if pending_uploads == 1 else 's' }} still processing. This page refreshes automatically.
-            {% else %}
-                Recent upload activity for your account.
-            {% endif %}
-        </p>
-    </div>
-
-    <div class="status-grid">
-        {% for upload in recent_uploads %}
-        <article class="status-card status-card-{{ upload.status }}">
-            <div class="status-card-head">
-                <p class="card-kicker">Scan {{ loop.index }}</p>
-                <p class="status-pill status-pill-{{ upload.status }}">{{ upload.status }}</p>
-            </div>
-
-            <div class="card-body">
-                <div class="detail-row">
-                    <span>File</span>
-                    <span>{{ upload.filename }}</span>
-                </div>
-                <div class="detail-row">
-                    <span>Submitted</span>
-                    <span>{{ upload.created_at.strftime('%Y-%m-%d %H:%M:%S') if upload.created_at else 'N/A' }}</span>
-                </div>
-                <div class="detail-row">
-                    <span>Detections</span>
-                    <span>{{ upload.total_detections if upload.total_detections is defined else 0 }}</span>
-                </div>
-                {% if upload.status == 'failed' and upload.error %}
-                <p class="status-note">{{ upload.error }}</p>
-                {% elif upload.status == 'pending' %}
-                <p class="status-note">Analysis is running in the ML client. Results will appear here first.</p>
-                {% elif upload.status == 'done' and (upload.total_detections or 0) == 0 %}
-                <p class="status-note">Processing finished, but no supported food items were detected in this frame.</p>
-                {% endif %}
-            </div>
-        </article>
-        {% endfor %}
-    </div>
-</section>
-{% endif %}
 
 {% if items %}
 <section class="inventory-grid" aria-label="Inventory items">
@@ -146,13 +94,12 @@
 
     <div class="band band-body">
         <p class="band-text">
-            {% if pending_uploads %}
-            Your scans are still processing. Stay on this page and the queue above will update automatically.
-            {% else %}
             No inventory items yet. Upload one fridge image to generate detections and populate the board.
-            {% endif %}
         </p>
-        <a class="text-link" href="{{ url_for('main.home') }}">Open upload intake</a>
+        <div class="auth-link-grid">
+            <a class="text-link" href="{{ url_for('main.home') }}">Open upload intake</a>
+            <a class="text-link" href="{{ url_for('main.scans') }}">Open Scan Queue</a>
+        </div>
     </div>
 </section>
 {% endif %}

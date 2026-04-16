@@ -92,11 +92,18 @@ def logout():
 @login_required
 def dashboard():
     items = get_inventory_items(current_user.get_id())
+    return render_template("dashboard.html", items=items)
+
+
+@main_bp.route("/scans")
+@login_required
+def scans():
     recent_uploads = get_recent_uploads(current_user.get_id())
-    pending_uploads = sum(1 for upload in recent_uploads if upload.get("status") == "pending")
+    pending_uploads = sum(
+        1 for upload in recent_uploads if upload.get("status") == "pending"
+    )
     return render_template(
-        "dashboard.html",
-        items=items,
+        "scans.html",
         recent_uploads=recent_uploads,
         pending_uploads=pending_uploads,
     )
@@ -136,10 +143,10 @@ def upload():
         timeout=10,
     )
     flash(
-        "Image queued for analysis. Processing can take a bit; the dashboard will show scan status.",
+        "Image queued for analysis. Processing can take a bit; the scan queue will update automatically.",
         "success",
     )
-    return redirect(url_for("main.dashboard"))
+    return redirect(url_for("main.scans"))
 
 
 @main_bp.route("/ml-callback", methods=["POST"])
