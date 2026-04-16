@@ -179,10 +179,10 @@ input {
 .display-word,
 .empty-word {
 	margin: 0;
-	font-size: clamp(4.6rem, 24vw, 7.8rem);
+	font-size: clamp(3rem, 16vw, 5rem);
 	font-weight: 900;
 	line-height: 0.84;
-	letter-spacing: -0.12em;
+	letter-spacing: -0.1em;
 	text-transform: uppercase;
 }
 
