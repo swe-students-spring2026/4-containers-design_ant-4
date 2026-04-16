@@ -36,6 +36,18 @@ def get_inventory_items(user_id):
     return items
 
 
+def get_recent_uploads(user_id, limit=8):
+    db = get_db()
+    uploads = list(
+        db.uploads.find(
+            {"user_id": user_id},
+            sort=[("created_at", -1)],
+            limit=limit,
+        )
+    )
+    return uploads
+
+
 def create_runtime_folders(task_id):
     task_dir = Config.RUNTIME_FOLDER / task_id
     input_dir = task_dir / "input"

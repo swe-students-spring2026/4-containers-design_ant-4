@@ -105,7 +105,7 @@ input {
 }
 
 .site-frame-copy {
-	padding-top: 0.15rem;
+	padding-top: 0rem;
 }
 
 .micro-copy {
@@ -122,7 +122,7 @@ input {
 }
 
 .system-name {
-	margin: 0.45rem 0 0;
+	margin: 0rem 0 0;
 	font-size: 0.95rem;
 	font-weight: 900;
 	text-transform: uppercase;
@@ -131,6 +131,7 @@ input {
 
 .hero-grid,
 .control-panel,
+.status-section,
 .empty-panel,
 .inventory-grid {
 	margin-bottom: var(--space-5);
@@ -460,6 +461,10 @@ input {
 	.inventory-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
+
+    .status-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
 }
 
 .site-nav {
@@ -514,7 +519,7 @@ input {
 	width: fit-content;
 	border: var(--line-thick) solid var(--onyx-black);
 	background: transparent;
-	padding: 0.55rem 0.75rem;
+	padding: 0.2rem 0.2rem;
 	font-size: 0.78rem;
 	font-weight: 900;
 	text-transform: uppercase;
@@ -562,4 +567,67 @@ input {
 
 .auth-panel-copy {
 	align-content: start;
+}
+
+
+.status-section {
+	display: grid;
+	gap: var(--space-3);
+}
+
+.status-band {
+	display: grid;
+	gap: var(--space-2);
+	padding: var(--space-2);
+	border: var(--line-thick) solid var(--onyx-black);
+	background: var(--aged-cream);
+}
+
+.status-grid {
+	display: grid;
+	gap: var(--space-3);
+}
+
+.status-card {
+	border: var(--line-thick) solid var(--onyx-black);
+	background: var(--aged-cream);
+}
+
+.status-card-head {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: var(--space-2);
+	align-items: center;
+	padding: var(--space-2);
+	background: var(--onyx-black);
+	color: var(--aged-cream);
+}
+
+.status-pill {
+	margin: 0;
+	padding: 0.3rem 0.45rem;
+	border: 0.14rem solid currentColor;
+	font-size: 0.72rem;
+	font-weight: 900;
+	line-height: 1;
+	text-transform: uppercase;
+}
+
+.status-pill-pending {
+	color: var(--aged-cream);
+}
+
+.status-pill-done {
+	color: var(--aged-cream);
+}
+
+.status-pill-failed {
+	color: var(--industrial-crimson);
+}
+
+.status-note {
+	margin: 0;
+	font-size: 0.86rem;
+	font-weight: 800;
+	line-height: 1.25;
 }

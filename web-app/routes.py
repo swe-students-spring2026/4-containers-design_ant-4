@@ -13,6 +13,7 @@ from db import get_db
 from services import (
     allowed_file,
     get_inventory_items,
+    get_recent_uploads,
     save_detection_results_to_db,
     save_uploaded_file,
     soft_delete_inventory_item,
@@ -91,7 +92,14 @@ def logout():
 @login_required
 def dashboard():
     items = get_inventory_items(current_user.get_id())
-    return render_template("dashboard.html", items=items)
+    recent_uploads = get_recent_uploads(current_user.get_id())
+    pending_uploads = sum(1 for upload in recent_uploads if upload.get("status") == "pending")
+    return render_template(
+        "dashboard.html",
+        items=items,
+        recent_uploads=recent_uploads,
+        pending_uploads=pending_uploads,
+    )
 
 
 @main_bp.route("/upload", methods=["POST"])
@@ -127,7 +135,10 @@ def upload():
         json={"task_id": task_id, "filename": saved_filename, "image_b64": image_b64},
         timeout=10,
     )
-
+    flash(
+        "Image queued for analysis. Processing can take a bit; the dashboard will show scan status.",
+        "success",
+    )
     return redirect(url_for("main.dashboard"))
 
 
