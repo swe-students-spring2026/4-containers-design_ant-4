@@ -1,13 +1,19 @@
 import shutil
 import subprocess
 import uuid
+import json
 from datetime import datetime
 from bson import ObjectId
 
 from werkzeug.utils import secure_filename
 
 from config import Config
-from db import get_db
+from db.ops.item_ops import (
+    create_item,
+    get_items_by_fridge,
+    update_item_name,
+    delete_item,
+)
 
 
 def allowed_file(filename):
@@ -25,12 +31,8 @@ def save_uploaded_file(file_storage):
     return unique_filename, save_path
 
 
-def get_inventory_items():
-    db = get_db()
-    items = list(
-        db.inventory_items.find({"is_deleted": False}, sort=[("created_at", -1)])
-    )
-    return items
+def get_inventory_items(fridge_id):
+    return get_items_by_fridge(fridge_id)
 
 
 def create_runtime_folders(task_id):
@@ -82,24 +84,9 @@ def run_ml_detection(uploaded_file_path):
     return task_id, output_dir, json_path
 
 
-def save_detection_results_to_db(task_id):
-    db = get_db()
-
-    raw = db.ml_results.find_one({"task_id": task_id})
-    if not raw:
-        return
-    detection_data = raw["detection_json"]
-    image_filename = raw.get("filename")
-
-    db.uploads.update_one(
-        {"task_id": task_id},
-        {
-            "$set": {
-                "status": "done",
-                "total_detections": detection_data.get("total_detections", 0),
-            }
-        },
-    )
+def save_detection_results_to_db(fridge_id, json_path):
+    with open(json_path, "r", encoding="utf-8") as file:
+        detection_data = json.load(file)
 
     items_by_class = {}
 
@@ -108,52 +95,30 @@ def save_detection_results_to_db(task_id):
             class_name = detection.get("class_name", "unknown")
             confidence = detection.get("confidence", 0)
 
-            item_data = {
-                "display_name": class_name,
-                "original_name": class_name,
-                "confidence": confidence,
-                "bbox_xyxy": detection.get("bbox_xyxy", []),
-                "image_filename": image_result.get("filename", image_filename),
-                "task_id": task_id,
-                "is_deleted": False,
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow(),
-            }
-
-            # keep only the highest-confidence detection for each class
             if class_name not in items_by_class:
-                items_by_class[class_name] = item_data
+                items_by_class[class_name] = confidence
             else:
-                if confidence > items_by_class[class_name]["confidence"]:
-                    items_by_class[class_name] = item_data
+                if confidence > items_by_class[class_name]:
+                    items_by_class[class_name] = confidence
 
-    items_to_insert = list(items_by_class.values())
+    inserted_ids = []
 
-    if items_to_insert:
-        db.inventory_items.insert_many(items_to_insert)
+    for class_name, confidence in items_by_class.items():
+        item_id = create_item(
+            fridge_id=fridge_id,
+            item_name=class_name,
+            item_added_date=None,
+            item_expiry_date=None,
+            item_confidence=confidence,
+        )
+        inserted_ids.append(item_id)
+
+    return inserted_ids
 
 
 def update_inventory_item_name(item_id, new_name):
-    db = get_db()
-    db.inventory_items.update_one(
-        {"_id": ObjectId(item_id)},
-        {
-            "$set": {
-                "display_name": new_name,
-                "updated_at": datetime.utcnow(),
-            }
-        },
-    )
+    return update_item_name(item_id, new_name)
 
 
 def soft_delete_inventory_item(item_id):
-    db = get_db()
-    db.inventory_items.update_one(
-        {"_id": ObjectId(item_id)},
-        {
-            "$set": {
-                "is_deleted": True,
-                "updated_at": datetime.utcnow(),
-            }
-        },
-    )
+    return delete_item(item_id)
