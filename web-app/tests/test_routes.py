@@ -116,9 +116,7 @@ def test_upload_route_sets_processing_flash(logged_in_client):
 
     with patch("routes.requests.post"), patch(
         "routes.get_db", return_value=fake_db
-    ), patch(
-        "routes.get_recent_uploads", return_value=[]
-    ):
+    ), patch("routes.get_recent_uploads", return_value=[]):
         response = logged_in_client.post(
             "/upload",
             data={"image": (BytesIO(b"fake image data"), "fridge.png")},
