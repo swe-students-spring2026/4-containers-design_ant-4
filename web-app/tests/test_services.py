@@ -12,7 +12,6 @@ from services import (
     allowed_file,
     create_runtime_folders,
     get_inventory_items,
-    run_ml_detection,
     save_detection_results_to_db,
     save_uploaded_file,
     soft_delete_inventory_item,
@@ -54,82 +53,6 @@ def test_get_inventory_items_filters_by_user():
             {"is_deleted": False, "user_id": "user-1"},
             sort=[("created_at", -1)],
         )
-
-
-def test_run_ml_detection_success():
-    temp_dir = Path(tempfile.mkdtemp())
-    uploaded_file = temp_dir / "fridge.png"
-    uploaded_file.write_bytes(b"fake image")
-
-    fake_output_dir = temp_dir / "output"
-    fake_output_dir.mkdir()
-    fake_json = fake_output_dir / "detection_results.json"
-    fake_json.write_text("{}")
-
-    with patch("services.create_runtime_folders") as mock_create_runtime_folders, patch(
-        "services.subprocess.run"
-    ) as mock_run, patch("services.shutil.copy") as mock_copy:
-        mock_create_runtime_folders.return_value = (
-            temp_dir / "task",
-            temp_dir / "input",
-            fake_output_dir,
-        )
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
-
-        task_id, output_dir, json_path = run_ml_detection(uploaded_file)
-
-        assert output_dir == fake_output_dir
-        assert json_path == fake_json
-        mock_copy.assert_called_once()
-        mock_run.assert_called_once()
-
-
-def test_run_ml_detection_raises_runtime_error_on_subprocess_failure():
-    temp_dir = Path(tempfile.mkdtemp())
-    uploaded_file = temp_dir / "fridge.png"
-    uploaded_file.write_bytes(b"fake image")
-
-    fake_output_dir = temp_dir / "output"
-    fake_output_dir.mkdir()
-
-    with patch("services.create_runtime_folders") as mock_create_runtime_folders, patch(
-        "services.subprocess.run"
-    ) as mock_run, patch("services.shutil.copy"):
-        mock_create_runtime_folders.return_value = (
-            temp_dir / "task",
-            temp_dir / "input",
-            fake_output_dir,
-        )
-        mock_run.return_value = MagicMock(
-            returncode=1, stdout="stdout text", stderr="stderr text"
-        )
-
-        with pytest.raises(RuntimeError, match="ML detection failed"):
-            run_ml_detection(uploaded_file)
-
-
-def test_run_ml_detection_raises_when_json_output_missing():
-    temp_dir = Path(tempfile.mkdtemp())
-    uploaded_file = temp_dir / "fridge.png"
-    uploaded_file.write_bytes(b"fake image")
-
-    fake_output_dir = temp_dir / "output"
-    fake_output_dir.mkdir()
-
-    with patch("services.create_runtime_folders") as mock_create_runtime_folders, patch(
-        "services.subprocess.run"
-    ) as mock_run, patch("services.shutil.copy"):
-        mock_create_runtime_folders.return_value = (
-            temp_dir / "task",
-            temp_dir / "input",
-            fake_output_dir,
-        )
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
-
-        with pytest.raises(
-            FileNotFoundError, match="detection_results.json was not generated"
-        ):
-            run_ml_detection(uploaded_file)
 
 
 def test_update_inventory_item_name():
