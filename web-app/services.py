@@ -25,10 +25,13 @@ def save_uploaded_file(file_storage):
     return unique_filename, save_path
 
 
-def get_inventory_items():
+def get_inventory_items(user_id):
     db = get_db()
     items = list(
-        db.inventory_items.find({"is_deleted": False}, sort=[("created_at", -1)])
+        db.inventory_items.find(
+            {"is_deleted": False, "user_id": user_id},
+            sort=[("created_at", -1)],
+        )
     )
     return items
 
@@ -88,8 +91,11 @@ def save_detection_results_to_db(task_id):
     raw = db.ml_results.find_one({"task_id": task_id})
     if not raw:
         return
+
+    upload_record = db.uploads.find_one({"task_id": task_id})
     detection_data = raw["detection_json"]
     image_filename = raw.get("filename")
+    user_id = upload_record.get("user_id") if upload_record else None
 
     db.uploads.update_one(
         {"task_id": task_id},
@@ -115,6 +121,7 @@ def save_detection_results_to_db(task_id):
                 "bbox_xyxy": detection.get("bbox_xyxy", []),
                 "image_filename": image_result.get("filename", image_filename),
                 "task_id": task_id,
+                "user_id": user_id,
                 "is_deleted": False,
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow(),
@@ -127,16 +134,16 @@ def save_detection_results_to_db(task_id):
                 if confidence > items_by_class[class_name]["confidence"]:
                     items_by_class[class_name] = item_data
 
-    items_to_insert = list(items_by_class.values())
+    items_to_insert = [item for item in items_by_class.values() if item.get("user_id")]
 
     if items_to_insert:
         db.inventory_items.insert_many(items_to_insert)
 
 
-def update_inventory_item_name(item_id, new_name):
+def update_inventory_item_name(item_id, new_name, user_id):
     db = get_db()
     db.inventory_items.update_one(
-        {"_id": ObjectId(item_id)},
+        {"_id": ObjectId(item_id), "user_id": user_id},
         {
             "$set": {
                 "display_name": new_name,
@@ -146,10 +153,10 @@ def update_inventory_item_name(item_id, new_name):
     )
 
 
-def soft_delete_inventory_item(item_id):
+def soft_delete_inventory_item(item_id, user_id):
     db = get_db()
     db.inventory_items.update_one(
-        {"_id": ObjectId(item_id)},
+        {"_id": ObjectId(item_id), "user_id": user_id},
         {
             "$set": {
                 "is_deleted": True,

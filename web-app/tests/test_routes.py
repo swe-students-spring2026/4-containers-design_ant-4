@@ -1,14 +1,23 @@
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
+from auth import User
+
 
 def test_home_page(client):
     response = client.get("/")
     assert response.status_code == 200
     assert b"Fridge Food Detector" in response.data
+    assert b"Log In" in response.data
 
 
-def test_dashboard_page(client):
+def test_dashboard_requires_login(client):
+    response = client.get("/dashboard", follow_redirects=False)
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
+
+
+def test_dashboard_page(logged_in_client, user_document):
     with patch("routes.get_inventory_items") as mock_get_inventory_items:
         mock_get_inventory_items.return_value = [
             {
@@ -21,19 +30,51 @@ def test_dashboard_page(client):
             }
         ]
 
-        response = client.get("/dashboard")
+        response = logged_in_client.get("/dashboard")
         assert response.status_code == 200
         assert b"Inventory Dashboard" in response.data
         assert b"tomato" in response.data
+        mock_get_inventory_items.assert_called_once_with(str(user_document["_id"]))
 
 
-def test_upload_route_success(client):
+def test_login_route_success(client, user_document):
+    fake_user = User(user_document)
+
+    with patch("routes.authenticate_user", return_value=fake_user):
+        response = client.post(
+            "/login",
+            data={"email": "chef@example.com", "password": "secret-pass"},
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/dashboard")
+
+        with client.session_transaction() as session:
+            assert session["_user_id"] == fake_user.get_id()
+
+
+def test_register_route_success(client, user_document):
+    fake_user = User(user_document)
+
+    with patch("routes.create_user", return_value=(fake_user, None)):
+        response = client.post(
+            "/register",
+            data={"email": "chef@example.com", "password": "secret-pass"},
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/dashboard")
+
+
+def test_upload_route_success(logged_in_client, user_document):
     fake_db = MagicMock()
     with patch("routes.requests.post") as mock_post, patch(
         "routes.get_db", return_value=fake_db
     ):
         data = {"image": (BytesIO(b"fake image data"), "fridge.png")}
-        response = client.post(
+        response = logged_in_client.post(
             "/upload",
             data=data,
             content_type="multipart/form-data",
@@ -42,6 +83,8 @@ def test_upload_route_success(client):
 
         assert response.status_code == 302
         fake_db.uploads.insert_one.assert_called_once()
+        upload_document = fake_db.uploads.insert_one.call_args.args[0]
+        assert upload_document["user_id"] == str(user_document["_id"])
         mock_post.assert_called_once()
         posted_json = mock_post.call_args.kwargs["json"]
         assert "task_id" in posted_json
@@ -78,9 +121,10 @@ def test_upload_route_missing_file(client):
         "/upload",
         data={},
         content_type="multipart/form-data",
+        follow_redirects=False,
     )
-    assert response.status_code == 400
-    assert b"No file part in request" in response.data
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
 
 
 def test_upload_route_empty_filename(client):
@@ -94,8 +138,8 @@ def test_upload_route_empty_filename(client):
         content_type="multipart/form-data",
     )
 
-    assert response.status_code == 400
-    assert b"No selected file" in response.data
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
 
 
 def test_upload_route_invalid_extension(client):
@@ -109,13 +153,28 @@ def test_upload_route_invalid_extension(client):
         content_type="multipart/form-data",
     )
 
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
+
+
+def test_upload_route_invalid_extension_when_logged_in(logged_in_client):
+    data = {
+        "image": (BytesIO(b"fake data"), "bad.txt"),
+    }
+
+    response = logged_in_client.post(
+        "/upload",
+        data=data,
+        content_type="multipart/form-data",
+    )
+
     assert response.status_code == 400
     assert b"Unsupported file type" in response.data
 
 
-def test_edit_item_route(client):
+def test_edit_item_route(logged_in_client, user_document):
     with patch("routes.update_inventory_item_name") as mock_update:
-        response = client.post(
+        response = logged_in_client.post(
             "/items/1234567890abcdef12345678/edit",
             data={"display_name": "green cucumber"},
             follow_redirects=False,
@@ -123,16 +182,20 @@ def test_edit_item_route(client):
 
         assert response.status_code == 302
         mock_update.assert_called_once_with(
-            "1234567890abcdef12345678", "green cucumber"
+            "1234567890abcdef12345678",
+            "green cucumber",
+            str(user_document["_id"]),
         )
 
 
-def test_delete_item_route(client):
+def test_delete_item_route(logged_in_client, user_document):
     with patch("routes.soft_delete_inventory_item") as mock_delete:
-        response = client.post(
+        response = logged_in_client.post(
             "/items/1234567890abcdef12345678/delete",
             follow_redirects=False,
         )
 
         assert response.status_code == 302
-        mock_delete.assert_called_once_with("1234567890abcdef12345678")
+        mock_delete.assert_called_once_with(
+            "1234567890abcdef12345678", str(user_document["_id"])
+        )

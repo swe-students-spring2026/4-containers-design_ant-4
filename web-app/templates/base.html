@@ -19,9 +19,34 @@
             <div class="site-frame-copy">
                 <p class="micro-copy micro-copy-italic">What is in my fridge??</p>
                 <p class="system-name">BETTER FRIDGE PROTOTYPE</p>
+                <div class="site-nav">
+                    {% if current_user.is_authenticated %}
+                        <p class="site-status">{{ current_user.email }}</p>
+                        <form action="{{ url_for('main.logout') }}" method="post">
+                            <button class="site-nav-button" type="submit">Log Out</button>
+                        </form>
+                    {% else %}
+                        <div class="site-nav-links">
+                            <a class="text-link" href="{{ url_for('main.login') }}">Log In</a>
+                            <a class="text-link" href="{{ url_for('main.register') }}">Register</a>
+                        </div>
+                    {% endif %}
+                </div>
             </div>
+            
         </header>
 
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <section class="flash-stack" aria-label="Application messages">
+                    {% for category, message in messages %}
+                        <p class="flash-banner flash-banner-{{ category }}">{{ message }}</p>
+                    {% endfor %}
+                </section>
+            {% endif %}
+        {% endwith %}
+        
         <main>
             {% block content %}{% endblock %}
         </main>
