@@ -37,6 +37,24 @@ def test_dashboard_page(logged_in_client, user_document):
         mock_get_inventory_items.assert_called_once_with(str(user_document["_id"]))
 
 
+def test_scans_page(logged_in_client, user_document):
+    with patch("routes.get_recent_uploads") as mock_get_recent_uploads:
+        mock_get_recent_uploads.return_value = [
+            {
+                "filename": "fridge.png",
+                "status": "pending",
+                "created_at": None,
+                "total_detections": 0,
+            }
+        ]
+
+        response = logged_in_client.get("/scans")
+        assert response.status_code == 200
+        assert b"Scan Queue" in response.data
+        assert b"fridge.png" in response.data
+        mock_get_recent_uploads.assert_called_once_with(str(user_document["_id"]))
+
+
 def test_login_route_success(client, user_document):
     fake_user = User(user_document)
 
@@ -82,6 +100,7 @@ def test_upload_route_success(logged_in_client, user_document):
         )
 
         assert response.status_code == 302
+        assert response.headers["Location"].endswith("/scans")
         fake_db.uploads.insert_one.assert_called_once()
         upload_document = fake_db.uploads.insert_one.call_args.args[0]
         assert upload_document["user_id"] == str(user_document["_id"])
@@ -90,6 +109,24 @@ def test_upload_route_success(logged_in_client, user_document):
         assert "task_id" in posted_json
         assert "image_b64" in posted_json
         assert posted_json["filename"].endswith("_fridge.png")
+
+
+def test_upload_route_sets_processing_flash(logged_in_client):
+    fake_db = MagicMock()
+
+    with patch("routes.requests.post"), patch(
+        "routes.get_db", return_value=fake_db
+    ), patch("routes.get_recent_uploads", return_value=[]):
+        response = logged_in_client.post(
+            "/upload",
+            data={"image": (BytesIO(b"fake image data"), "fridge.png")},
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        assert b"Image queued for analysis" in response.data
+    assert b"Scan Queue" in response.data
 
 
 def test_ml_callback_done(client):
