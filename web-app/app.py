@@ -5,7 +5,6 @@ from auth import get_user_by_id
 from config import Config
 from routes import main_bp
 
-
 login_manager = LoginManager()
 login_manager.login_view = "main.login"
 login_manager.login_message = "Sign in to access your dashboard."
