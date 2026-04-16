@@ -2,14 +2,23 @@ from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
+from auth import User
+
 
 def test_home_page(client):
     response = client.get("/")
     assert response.status_code == 200
     assert b"Fridge Food Detector" in response.data
+    assert b"Log In" in response.data
 
 
-def test_dashboard_page(client):
+def test_dashboard_requires_login(client):
+    response = client.get("/dashboard", follow_redirects=False)
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
+
+
+def test_dashboard_page(logged_in_client, user_document):
     with patch("routes.get_inventory_items") as mock_get_inventory_items:
         mock_get_inventory_items.return_value = [
             {
@@ -21,13 +30,44 @@ def test_dashboard_page(client):
             }
         ]
 
-        response = client.get("/dashboard")
+        response = logged_in_client.get("/dashboard")
         assert response.status_code == 200
         assert b"Inventory Dashboard" in response.data
         assert b"tomato" in response.data
 
 
-def test_upload_route_success(client):
+def test_login_route_success(client, user_document):
+    fake_user = User(user_document)
+
+    with patch("routes.authenticate_user", return_value=fake_user):
+        response = client.post(
+            "/login",
+            data={"email": "chef@example.com", "password": "secret-pass"},
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/dashboard")
+
+        with client.session_transaction() as session:
+            assert session["_user_id"] == fake_user.get_id()
+
+
+def test_register_route_success(client, user_document):
+    fake_user = User(user_document)
+
+    with patch("routes.create_user", return_value=(fake_user, None)):
+        response = client.post(
+            "/register",
+            data={"email": "chef@example.com", "password": "secret-pass"},
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/dashboard")
+
+
+def test_upload_route_success(logged_in_client):
     with patch("routes.save_uploaded_file") as mock_save_uploaded_file, patch(
         "routes.run_ml_detection"
     ) as mock_run_ml_detection, patch(
@@ -45,7 +85,7 @@ def test_upload_route_success(client):
         mock_save_detection_results.return_value = ["item1", "item2"]
 
         data = {"image": (BytesIO(b"fake image data"), "fridge.png")}
-        response = client.post(
+        response = logged_in_client.post(
             "/upload",
             data=data,
             content_type="multipart/form-data",
@@ -58,46 +98,15 @@ def test_upload_route_success(client):
         mock_save_detection_results.assert_called_once()
 
 
-# Old callback-based tests are obsolete after switching to the
-# local sync flow:
-# - requests.post to ML service
-# - uploads collection
-# - /ml-callback route
-#
-# Keep them commented for reference only.
-
-# def test_ml_callback_done(client):
-#     fake_db = MagicMock()
-#     with patch("routes.get_db", return_value=fake_db), patch(
-#         "routes.save_detection_results_to_db"
-#     ) as mock_save:
-#         response = client.post(
-#             "/ml-callback",
-#             json={"task_id": "task123", "status": "done"},
-#         )
-#         assert response.status_code == 200
-#         mock_save.assert_called_once_with("task123")
-
-
-# def test_ml_callback_failed(client):
-#     fake_db = MagicMock()
-#     with patch("routes.get_db", return_value=fake_db):
-#         response = client.post(
-#             "/ml-callback",
-#             json={"task_id": "task123", "status": "failed", "error": "boom"},
-#         )
-#         assert response.status_code == 200
-#         fake_db.uploads.update_one.assert_called_once()
-
-
 def test_upload_route_missing_file(client):
     response = client.post(
         "/upload",
         data={},
         content_type="multipart/form-data",
+        follow_redirects=False,
     )
-    assert response.status_code == 400
-    assert b"No file part in request" in response.data
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
 
 
 def test_upload_route_empty_filename(client):
@@ -111,8 +120,8 @@ def test_upload_route_empty_filename(client):
         content_type="multipart/form-data",
     )
 
-    assert response.status_code == 400
-    assert b"No selected file" in response.data
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
 
 
 def test_upload_route_invalid_extension(client):
@@ -126,13 +135,28 @@ def test_upload_route_invalid_extension(client):
         content_type="multipart/form-data",
     )
 
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
+
+
+def test_upload_route_invalid_extension_when_logged_in(logged_in_client):
+    data = {
+        "image": (BytesIO(b"fake data"), "bad.txt"),
+    }
+
+    response = logged_in_client.post(
+        "/upload",
+        data=data,
+        content_type="multipart/form-data",
+    )
+
     assert response.status_code == 400
     assert b"Unsupported file type" in response.data
 
 
-def test_edit_item_route(client):
+def test_edit_item_route(logged_in_client):
     with patch("routes.update_inventory_item_name") as mock_update:
-        response = client.post(
+        response = logged_in_client.post(
             "/items/1234567890abcdef12345678/edit",
             data={"item_name": "green cucumber"},
             follow_redirects=False,
@@ -140,13 +164,14 @@ def test_edit_item_route(client):
 
         assert response.status_code == 302
         mock_update.assert_called_once_with(
-            "1234567890abcdef12345678", "green cucumber"
+            "1234567890abcdef12345678",
+            "green cucumber",
         )
 
 
-def test_delete_item_route(client):
+def test_delete_item_route(logged_in_client):
     with patch("routes.soft_delete_inventory_item") as mock_delete:
-        response = client.post(
+        response = logged_in_client.post(
             "/items/1234567890abcdef12345678/delete",
             follow_redirects=False,
         )
