@@ -39,17 +39,17 @@ Use values that match the active code in `web-app/config.py`:
 
 If you run through Docker Compose instead of fully local processes, the defaults in code are aimed at container service names:
 - Mongo default in code: `mongodb://mongodb:27017/`
-- ML service default in code: `http://ml-client:10990`
+- ML service default in code: `http://ml-client:10990/`
 
 4. Start MongoDB
 
 If MongoDB is not already running, start it with Docker:
 
-`docker run --name fridge-mongo -d -p 27017:27017 mongo`
+`docker run --name mongodb -d -p 27017:27017 mongo`
 
 If the container already exists but is stopped:
 
-`docker start fridge-mongo`
+`docker start mongodb`
 
 5. Start the ML subsystem
 
@@ -313,4 +313,4 @@ Common issues / troubleshooting
 
 - If ML detection fails with missing ML packages:
   - this is usually an issue in `machine-learning-client`, not in the Flask web layer
-  - make sure that subsystem�s environment is installed correctly and that `ml_client_service.py` starts successfully
+  - make sure that subsystem's environment is installed correctly and that `ml_client_service.py` starts successfully
