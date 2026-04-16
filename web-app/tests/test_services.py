@@ -1,15 +1,14 @@
 import tempfile
-from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from bson import ObjectId
 from werkzeug.datastructures import FileStorage
 
 from services import (
     allowed_file,
     create_runtime_folders,
+    get_inventory_items,
     run_ml_detection,
     save_detection_results_to_db,
     save_uploaded_file,
@@ -83,79 +82,151 @@ def test_run_ml_detection_success():
         mock_run.assert_called_once()
 
 
+def test_get_inventory_items():
+    with patch("services.get_items_by_fridge") as mock_get_items:
+        mock_get_items.return_value = [{"item_name": "milk"}]
+
+        result = get_inventory_items("fake_fridge_id")
+
+        assert result == [{"item_name": "milk"}]
+        mock_get_items.assert_called_once_with("fake_fridge_id")
+
+
 def test_update_inventory_item_name():
-    fake_db = MagicMock()
-
-    with patch("services.get_db", return_value=fake_db):
-        item_id = str(ObjectId())
-        update_inventory_item_name(item_id, "green cucumber")
-
-        fake_db.inventory_items.update_one.assert_called_once()
-        args, kwargs = fake_db.inventory_items.update_one.call_args
-        assert args[0]["_id"] == ObjectId(item_id)
-        assert args[1]["$set"]["display_name"] == "green cucumber"
-        assert isinstance(args[1]["$set"]["updated_at"], datetime)
+    with patch("services.update_item_name") as mock_update:
+        update_inventory_item_name("fake_item_id", "green cucumber")
+        mock_update.assert_called_once_with("fake_item_id", "green cucumber")
 
 
 def test_soft_delete_inventory_item():
-    fake_db = MagicMock()
-
-    with patch("services.get_db", return_value=fake_db):
-        item_id = str(ObjectId())
-        soft_delete_inventory_item(item_id)
-
-        fake_db.inventory_items.update_one.assert_called_once()
-        args, kwargs = fake_db.inventory_items.update_one.call_args
-        assert args[0]["_id"] == ObjectId(item_id)
-        assert args[1]["$set"]["is_deleted"] is True
-        assert isinstance(args[1]["$set"]["updated_at"], datetime)
+    with patch("services.delete_item") as mock_delete:
+        soft_delete_inventory_item("fake_item_id")
+        mock_delete.assert_called_once_with("fake_item_id")
 
 
 def test_save_detection_results_to_db():
-    fake_db = MagicMock()
-    fake_db.ml_results.find_one.return_value = {
-        "task_id": "task123",
-        "filename": "fridge.png",
-        "detection_json": {
-            "total_detections": 3,
-            "results": [
+    temp_dir = Path(tempfile.mkdtemp())
+    json_path = temp_dir / "detection_results.json"
+    json_path.write_text(
+        """
+        {
+          "results": [
+            {
+              "filename": "fridge.png",
+              "detections": [
                 {
-                    "filename": "fridge.png",
-                    "detections": [
-                        {
-                            "class_name": "tomato",
-                            "confidence": 0.4,
-                            "bbox_xyxy": [1, 2, 3, 4],
-                        },
-                        {
-                            "class_name": "tomato",
-                            "confidence": 0.8,
-                            "bbox_xyxy": [5, 6, 7, 8],
-                        },
-                        {
-                            "class_name": "cucumber",
-                            "confidence": 0.5,
-                            "bbox_xyxy": [9, 10, 11, 12],
-                        },
-                    ],
+                  "class_name": "tomato",
+                  "confidence": 0.4,
+                  "bbox_xyxy": [1, 2, 3, 4]
+                },
+                {
+                  "class_name": "tomato",
+                  "confidence": 0.8,
+                  "bbox_xyxy": [5, 6, 7, 8]
+                },
+                {
+                  "class_name": "cucumber",
+                  "confidence": 0.5,
+                  "bbox_xyxy": [9, 10, 11, 12]
                 }
-            ],
-        },
-    }
+              ]
+            }
+          ]
+        }
+        """,
+        encoding="utf-8",
+    )
 
-    with patch("services.get_db", return_value=fake_db):
-        save_detection_results_to_db("task123")
+    with patch("services.create_item") as mock_create_item:
+        mock_create_item.side_effect = ["id1", "id2"]
 
-        fake_db.uploads.update_one.assert_called_once()
-        fake_db.inventory_items.insert_many.assert_called_once()
+        inserted_ids = save_detection_results_to_db("fake_fridge_id", json_path)
 
-        inserted_items = fake_db.inventory_items.insert_many.call_args[0][0]
-        assert len(inserted_items) == 2
+        assert inserted_ids == ["id1", "id2"]
+        assert mock_create_item.call_count == 2
 
-        names = {item["original_name"] for item in inserted_items}
-        assert names == {"tomato", "cucumber"}
-
-        tomato_item = next(
-            item for item in inserted_items if item["original_name"] == "tomato"
+        mock_create_item.assert_any_call(
+            fridge_id="fake_fridge_id",
+            item_name="tomato",
+            item_added_date=None,
+            item_expiry_date=None,
+            item_confidence=0.8,
         )
-        assert tomato_item["confidence"] == 0.8
+        mock_create_item.assert_any_call(
+            fridge_id="fake_fridge_id",
+            item_name="cucumber",
+            item_added_date=None,
+            item_expiry_date=None,
+            item_confidence=0.5,
+        )
+
+
+# Old database-coupled tests from the callback/uploads/inventory_items design
+# are obsolete after refactoring services.py to use item_ops directly.
+# Keep them commented for reference.
+
+# def test_update_inventory_item_name():
+#     fake_db = MagicMock()
+#
+#     with patch("services.get_db", return_value=fake_db):
+#         item_id = str(ObjectId())
+#         update_inventory_item_name(item_id, "green cucumber")
+#
+#         fake_db.inventory_items.update_one.assert_called_once()
+#         args, kwargs = fake_db.inventory_items.update_one.call_args
+#         assert args[0]["_id"] == ObjectId(item_id)
+#         assert args[1]["$set"]["display_name"] == "green cucumber"
+#         assert isinstance(args[1]["$set"]["updated_at"], datetime)
+
+
+# def test_soft_delete_inventory_item():
+#     fake_db = MagicMock()
+#
+#     with patch("services.get_db", return_value=fake_db):
+#         item_id = str(ObjectId())
+#         soft_delete_inventory_item(item_id)
+#
+#         fake_db.inventory_items.update_one.assert_called_once()
+#         args, kwargs = fake_db.inventory_items.update_one.call_args
+#         assert args[0]["_id"] == ObjectId(item_id)
+#         assert args[1]["$set"]["is_deleted"] is True
+#         assert isinstance(args[1]["$set"]["updated_at"], datetime)
+
+
+# def test_save_detection_results_to_db():
+#     fake_db = MagicMock()
+#     fake_db.ml_results.find_one.return_value = {
+#         "task_id": "task123",
+#         "filename": "fridge.png",
+#         "detection_json": {
+#             "total_detections": 3,
+#             "results": [
+#                 {
+#                     "filename": "fridge.png",
+#                     "detections": [
+#                         {
+#                             "class_name": "tomato",
+#                             "confidence": 0.4,
+#                             "bbox_xyxy": [1, 2, 3, 4],
+#                         },
+#                         {
+#                             "class_name": "tomato",
+#                             "confidence": 0.8,
+#                             "bbox_xyxy": [5, 6, 7, 8],
+#                         },
+#                         {
+#                             "class_name": "cucumber",
+#                             "confidence": 0.5,
+#                             "bbox_xyxy": [9, 10, 11, 12],
+#                         },
+#                     ],
+#                 }
+#             ],
+#         },
+#     }
+#
+#     with patch("services.get_db", return_value=fake_db):
+#         save_detection_results_to_db("task123")
+#
+#         fake_db.uploads.update_one.assert_called_once()
+#         fake_db.inventory_items.insert_many.assert_called_once()

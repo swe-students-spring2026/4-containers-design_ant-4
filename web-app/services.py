@@ -2,6 +2,9 @@ import shutil
 import subprocess
 import uuid
 import json
+import os
+import sys
+from pathlib import Path
 from datetime import datetime
 from bson import ObjectId
 
@@ -55,7 +58,22 @@ def run_ml_detection(uploaded_file_path):
 
     ml_base_dir = Config.BASE_DIR.parent / "machine-learning-client"
     ml_script_path = ml_base_dir / "food_detection.py"
-    ml_python_path = ml_base_dir / "venv" / "bin" / "python"
+
+    if os.name == "nt":
+        candidate_python = ml_base_dir / "venv" / "Scripts" / "python.exe"
+    else:
+        candidate_python = ml_base_dir / "venv" / "bin" / "python"
+
+    ml_python_path = candidate_python if candidate_python.exists() else Path(sys.executable)
+
+    print("ML base dir:", ml_base_dir)
+    print("ML script path:", ml_script_path)
+    print("ML python path:", ml_python_path)
+    print("ML script exists:", ml_script_path.exists())
+    print("ML python exists:", Path(ml_python_path).exists())
+
+    if not ml_script_path.exists():
+        raise FileNotFoundError(f"ML script not found: {ml_script_path}")
 
     command = [
         str(ml_python_path),

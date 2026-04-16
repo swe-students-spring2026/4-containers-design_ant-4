@@ -1,43 +1,50 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Inventory Dashboard</title>
-</head>
-<body>
+  </head>
+  <body>
     <h1>Inventory Dashboard</h1>
 
     <p><a href="/">Back to Upload Page</a></p>
 
-    {% if items %}
-        {% for item in items %}
-            <div style="border: 1px solid #ccc; padding: 12px; margin: 12px 0;">
-                <p><strong>Current Name:</strong> {{ item.display_name }}</p>
-                <p><strong>Original ML Name:</strong> {{ item.original_name }}</p>
-                <p><strong>Confidence:</strong> {{ item.confidence }}</p>
-                <p><strong>Added At:</strong> {{ item.created_at.strftime('%Y-%m-%d %H:%M:%S') if item.created_at else 'N/A' }}</p>
-                <p><strong>Image:</strong> {{ item.image_filename }}</p>
+    {% if items %} {% for item in items %}
+    <div style="border: 1px solid #ccc; padding: 12px; margin: 12px 0">
+      <p><strong>Current Name:</strong> {{ item.item_name }}</p>
+      <p><strong>Confidence:</strong> {{ item.item_confidence }}</p>
+      <p>
+        <strong>Added At:</strong> {{ item.item_added_date.strftime('%Y-%m-%d
+        %H:%M:%S') if item.created_at else 'N/A' }}
+      </p>
 
-                <form action="/items/{{ item._id }}/edit" method="post" style="margin-top: 10px;">
-                    <label for="display_name_{{ item._id }}">Edit name:</label>
-                    <input
-                        type="text"
-                        id="display_name_{{ item._id }}"
-                        name="display_name"
-                        value="{{ item.display_name }}"
-                        required
-                    >
-                    <button type="submit">Update Name</button>
-                </form>
+      <form
+        action="/items/{{ item._id }}/edit"
+        method="post"
+        style="margin-top: 10px"
+      >
+        <label for="item_name_{{ item._id }}">Edit name:</label>
+        <input
+          type="text"
+          id="item_name_{{ item._id }}"
+          name="item_name"
+          value="{{ item.item_name }}"
+          required
+        />
+        <button type="submit">Update Name</button>
+      </form>
 
-                <form action="/items/{{ item._id }}/delete" method="post" style="margin-top: 10px;">
-                    <button type="submit">Delete Item</button>
-                </form>
-            </div>
-        {% endfor %}
-    {% else %}
-        <p>No inventory items yet.</p>
+      <form
+        action="/items/{{ item._id }}/delete"
+        method="post"
+        style="margin-top: 10px"
+      >
+        <button type="submit">Delete Item</button>
+      </form>
+    </div>
+    {% endfor %} {% else %}
+    <p>No inventory items yet.</p>
     {% endif %}
-</body>
+  </body>
 </html>
