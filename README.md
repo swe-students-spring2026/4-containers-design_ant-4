@@ -8,6 +8,7 @@ A containerized application that uses machine learning to detect food items in f
 
 ## Team Members
 - [Roger](https://github.com/DaobaRoger12)
+- [Zelu Zhang](https://github.com/zzl0720-2025)
 
 ## Architecture
 
