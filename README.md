@@ -11,17 +11,18 @@ A containerized application that uses machine learning to detect food items in f
 - [Roger](https://github.com/DaobaRoger12)
 - [Zelu Zhang](https://github.com/zzl0720-2025)
 - [William Zhang](https://github.com/Incrediblez7)
-- [Mumu Li](https://github.com/zzl0720-2025)
+- [Mumu Li](https://github.com/n3xta)
+- [Haoze(Frank) Wu](https://github.com/HandEater)
 
 ## Architecture
 
 The system consists of three Docker containers:
 
-| Container | Port | Description |
-|-----------|------|-------------|
-| **Web App** | 5000 | Flask server with user authentication (register/login), image upload, inventory dashboard, and scan queue. Sends uploaded images to the ML client via HTTP. |
+| Container     | Port  | Description                                                                                                                                                     |
+| ------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Web App**   | 5000  | Flask server with user authentication (register/login), image upload, inventory dashboard, and scan queue. Sends uploaded images to the ML client via HTTP.     |
 | **ML Client** | 10990 | Flask microservice that receives images, runs Grounding DINO food detection, saves results to MongoDB, and calls back to the web app when processing completes. |
-| **MongoDB** | 27017 | Stores user accounts, upload records, ML detection results, and inventory items. |
+| **MongoDB**   | 27017 | Stores user accounts, upload records, ML detection results, and inventory items.                                                                                |
 
 ## Prerequisites
 

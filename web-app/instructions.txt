@@ -1,116 +1,316 @@
-Web App Setup and Run Instructions
+Project purpose
 
-Project:
-Fridge Food Detector Web App
+This `web-app` is the Flask frontend for the Fridge Food Detector system described in the root `README.md`. It is responsible for:
+- user registration and login
+- accepting fridge-image uploads from the browser
+- creating upload/scan records in MongoDB
+- sending the uploaded image to the separate ML microservice
+- receiving the ML callback after processing
+- showing each user their own scan history and editable inventory dashboard
 
-Overview:
-This web app allows users to upload a fridge image, run food detection using the machine-learning-client subsystem, store detected items in MongoDB, and view/edit/delete the inventory on a dashboard.
+This folder is not the ML implementation. The current live detection path is a web-app -> ML service HTTP request -> ML service writes results -> web-app callback -> MongoDB inventory update flow.
 
-Requirements:
-- Python 3.10+ recommended
-- MongoDB running locally on port 27017
-- machine-learning-client running locally on port 10990
+Quick setup and run
 
-Directory:
-This README applies to the web-app/ subdirectory only.
+This section preserves the practical local setup steps from the older instructions, but updates them to match the current code.
 
---------------------------------------------------
-1. Create and activate virtual environment
---------------------------------------------------
+1. Create and activate a virtual environment inside `web-app/`
 
-python3 -m venv venv
-source venv/bin/activate
+Windows PowerShell:
+`python -m venv venv`
+`.\venv\Scripts\Activate.ps1`
 
---------------------------------------------------
+macOS/Linux:
+`python3 -m venv venv`
+`source venv/bin/activate`
+
 2. Install dependencies
---------------------------------------------------
 
-pip install -r requirements.txt
+`pip install -r requirements.txt`
 
---------------------------------------------------
-3. Configure environment variables
---------------------------------------------------
+3. Create `web-app/.env`
 
-Create a .env file inside web-app/ with the following content:
+Use values that match the active code in `web-app/config.py`:
 
-MONGO_URI=mongodb://mongodb:27017/
-DB_NAME=fridge_app
-SECRET_KEY=dev-secret-key
+`MONGO_URI=mongodb://localhost:27017/`
+`DB_NAME=fridge_app`
+`SECRET_KEY=dev-secret-key`
+`ML_SERVICE_URL=http://localhost:10990`
 
---------------------------------------------------
+If you run through Docker Compose instead of fully local processes, the defaults in code are aimed at container service names:
+- Mongo default in code: `mongodb://mongodb:27017/`
+- ML service default in code: `http://ml-client:10990`
+
 4. Start MongoDB
---------------------------------------------------
 
 If MongoDB is not already running, start it with Docker:
 
-docker run --name mongodb -d -p 27017:27017 mongo
+`docker run --name fridge-mongo -d -p 27017:27017 mongo`
 
 If the container already exists but is stopped:
 
-docker start mongodb
+`docker start fridge-mongo`
 
---------------------------------------------------
-5. Make sure the ML subsystem is ready
---------------------------------------------------
+5. Start the ML subsystem
 
-The web app calls the Python interpreter inside:
+The root `README.md` shows the active local flow:
+- go to `machine-learning-client/`
+- create/activate its virtual environment
+- install its requirements
+- run `python ml_client_service.py`
 
-machine-learning-client/venv/bin/python
+The current web app does not directly run ML during normal requests. It sends an HTTP request to `ML_SERVICE_URL` and expects that service to handle detection and later call back to `/ml-callback`.
 
-So the machine-learning-client virtual environment must already exist and must have all required ML dependencies installed.
-
-The ML script used is:
-
-machine-learning-client/food_detection.py
-
---------------------------------------------------
 6. Run the web app
---------------------------------------------------
 
-From inside web-app/:
+From inside `web-app/`:
 
-python app.py
+`python app.py`
 
-Then open in browser:
+or:
 
-http://127.0.0.1:5000
+`flask run --host=0.0.0.0 --port=5000`
 
---------------------------------------------------
-7. Main features currently supported
---------------------------------------------------
+Then open:
 
-- Upload a fridge image
-- Save uploaded image locally
-- Run ML food detection
-- Store detected items in MongoDB
-- Show detected items on dashboard
-- Edit detected item names
-- Delete items from dashboard
-- Deduplicate repeated food classes from the same uploaded image
+`http://127.0.0.1:5000`
 
---------------------------------------------------
-8. Notes
---------------------------------------------------
+Main features currently supported
 
-- Uploaded files are stored in web-app/uploads/
-- Runtime ML task files are stored in machine-learning-client/runtime/
-- The dashboard only shows items where is_deleted is False
-- For duplicate detections of the same food in one uploaded image, only the highest-confidence result is stored
+- Register a new user account
+- Log in and log out with Flask-Login session handling
+- Upload one fridge image from the home page
+- Save uploaded images locally in `web-app/uploads/`
+- Create a pending scan record in MongoDB
+- Send the image to the ML service as base64 JSON
+- Show recent scans for the logged-in user on `/scans`
+- Receive ML completion/failure callbacks on `/ml-callback`
+- Save detected food items into `inventory_items`
+- Deduplicate repeated detections of the same class within a task by keeping the highest-confidence result
+- Show a per-user inventory dashboard on `/dashboard`
+- Rename inventory items inline
+- Soft-delete inventory items from the dashboard
 
---------------------------------------------------
-9. Reset database for testing
---------------------------------------------------
+High-level structure
 
-To clear all inventory items and uploads:
+- `app.py`: Flask entry point and app factory.
+- `routes.py`: Main blueprint and all current HTTP routes.
+- `auth.py`: Registration/login helpers and Flask-Login user loading support.
+- `services.py`: Upload, query, inventory, and ML-result ingestion helpers.
+- `config.py`: Environment loading and runtime configuration.
+- `db.py`: The MongoDB connection helper actually used by the running app.
+- `templates/`: Server-rendered Jinja templates.
+- `static/`: Shared CSS and the fridge placeholder image.
+- `uploads/`: Saved upload files.
+- `runtime/`: Local runtime task folder area for an alternate ML path in `services.py`; present, but not part of the main request flow today.
+- `tests/`: Route/service tests and fixtures.
+- `db/`: Appears to contain older model/helper code that is not used by the current Flask request path.
 
-python -c "from db import get_db; db = get_db(); db.inventory_items.delete_many({}); db.uploads.delete_many({}); print('cleared')"
+Key files and responsibilities
 
---------------------------------------------------
-10. Common issue
---------------------------------------------------
+- `app.py`
+  - Defines `create_app(test_config=None)`.
+  - Configures `SECRET_KEY`, `UPLOAD_FOLDER`, and `RUNTIME_FOLDER`.
+  - Registers `main_bp` from `routes.py`.
+  - Initializes Flask-Login and uses `auth.get_user_by_id`.
 
-If ML detection fails with missing packages such as cv2, torch, or transformers,
-make sure the machine-learning-client virtual environment is correctly set up and that
-the web app is calling:
+- `routes.py`
+  - `/`: renders `templates/index.html`
+  - `/login`: authenticates existing users
+  - `/register`: creates users
+  - `/logout`: POST-only logout
+  - `/dashboard`: inventory page for the current user
+  - `/scans`: recent upload status page for the current user
+  - `/upload`: validates image upload, saves the file, inserts a pending upload record, and posts work to the ML service
+  - `/ml-callback`: receives async result status from the ML service
+  - `/items/<item_id>/edit`: renames one inventory item
+  - `/items/<item_id>/delete`: soft-deletes one inventory item
+  - Also contains `_get_safe_redirect_target()` to prevent unsafe redirect targets during auth flows
 
-machine-learning-client/venv/bin/python
+- `auth.py`
+  - Normalizes emails to lowercase with `normalize_email()`
+  - Stores password hashes with Werkzeug
+  - Wraps Mongo user docs in a `User` class used by Flask-Login
+
+- `services.py`
+  - `allowed_file()`: current allowed extensions are `png`, `jpg`, `jpeg`, `webp`
+  - `save_uploaded_file()`: writes uploads using `secure_filename()` and a UUID prefix
+  - `get_inventory_items()`: reads only non-deleted items for one user
+  - `get_recent_uploads()`: reads recent uploads for one user
+  - `save_detection_results_to_db()`: converts ML results into `inventory_items`
+  - `update_inventory_item_name()` and `soft_delete_inventory_item()`: current item mutation helpers
+  - `create_runtime_folders()` and `run_ml_detection()`: alternate/local subprocess ML path that exists in code but is not used by `routes.py` today
+
+- `templates/`
+  - `base.html`: outer shell, nav area, and flash messages
+  - `index.html`: upload page / login-register prompt
+  - `login.html`, `register.html`: auth forms
+  - `dashboard.html`: inventory cards, inline rename form, delete form
+  - `scans.html`: recent scan status cards
+
+- `static/style.css`
+  - Defines the current visual system used by all templates
+
+Request flow / page flow
+
+1. Anonymous user visits `/`
+   - `index.html` shows login/register links instead of the upload form.
+
+2. User registers or logs in
+   - Auth uses `auth.create_user()` or `auth.authenticate_user()`.
+   - Successful login/register redirects to the dashboard or a safe `next` path.
+
+3. Logged-in user uploads an image on `/`
+   - `routes.upload()` checks that `image` exists, has a filename, and passes `allowed_file()`.
+   - `services.save_uploaded_file()` saves the file in `uploads/`.
+   - The route inserts a pending record into `uploads`.
+   - The saved file is re-read, base64 encoded, and POSTed to `Config.ML_SERVICE_URL + "/task"`.
+   - The user is redirected to `/scans`.
+
+4. User checks `/scans`
+   - The page shows recent uploads and status values like `pending`, `done`, or `failed`.
+
+5. ML service calls `/ml-callback`
+   - On `status == "done"`, the route calls `save_detection_results_to_db(task_id)`.
+   - Otherwise it marks the upload as `failed` and stores the reported error.
+
+6. User checks `/dashboard`
+   - The page shows only `inventory_items` for that user where `is_deleted` is `False`.
+   - Inline edit and delete forms POST back to item routes.
+
+Data / persistence flow
+
+The active app code uses `db.py`, which creates `MongoClient(Config.MONGO_URI)` and selects `Config.DB_NAME`.
+
+Collections used by the current active path:
+- `users`
+- `uploads`
+- `ml_results`
+- `inventory_items`
+
+Current document behavior visible from code:
+
+- `users`
+  - stores `email`, `password_hash`, `created_at`
+
+- `uploads`
+  - stores `task_id`, `filename`, `user_id`, `status`, `created_at`
+  - later updated with `total_detections`
+  - failure path stores `error`
+
+- `ml_results`
+  - not written by the web app
+  - expected to already contain a document keyed by `task_id`
+  - expected fields include `detection_json` and optionally `filename`
+  - this structure is coming from the ML service; confirm there before changing it
+
+- `inventory_items`
+  - stores `display_name`, `original_name`, `confidence`, `bbox_xyxy`, `image_filename`, `task_id`, `user_id`, `is_deleted`, `created_at`, `updated_at`
+
+Important current behavior:
+- inventory insertion is user-scoped by copying `user_id` from the matching upload record
+- if multiple detections share the same `class_name` in one task, only the highest-confidence one is inserted
+- item deletion is a soft delete by setting `is_deleted=True`
+
+Development conventions
+
+- This is a server-rendered Flask app, not a frontend SPA.
+- Keep request handling in `routes.py` and reusable data/business logic in `services.py`.
+- Keep auth-specific logic in `auth.py`.
+- Use `@login_required` for pages and actions that expose or mutate user data.
+- Preserve the current flash-message pattern for user feedback.
+- Preserve current user scoping by using `current_user.get_id()` and filtering on `user_id`.
+- Timestamps are currently written with `datetime.utcnow()`.
+- Existing tests use direct patching of route/service dependencies; follow that style when extending tests.
+
+Safe modification rules
+
+- Do not break per-user isolation. Uploads and inventory are intentionally filtered by logged-in user ID.
+- Do not replace soft delete with hard delete unless the product requirement explicitly changes.
+- Do not bypass `allowed_file()` or filename sanitization when handling uploads.
+- Do not change the `/ml-callback` contract casually; the web app depends on the ML service posting `task_id` and `status`.
+- Do not change collection names or key field names in only one container. The ML client and web app are coupled through `task_id`, `ml_results`, and the callback flow.
+- If you add new user-visible data from ML results, trace it from the ML service output format through `save_detection_results_to_db()` before changing templates.
+
+Common pitfalls / things not to break
+
+- `web-app/config.py` uses `DB_NAME`, but the root `env.example` currently shows `MONGO_DB_NAME`. For the active web app code, `DB_NAME` is the variable that matters.
+- `web-app/db.py` is the active Mongo entry point for the app. The separate `web-app/db/` package (`mongo.py`, `models/`, `ops/`) looks like older or alternate code and is not imported by the current request flow.
+- `services.run_ml_detection()` still points at `machine-learning-client/food_detection.py` and a virtualenv path under `machine-learning-client/venv/bin/python`, but `routes.py` does not call it. Do not assume that helper reflects the current production path.
+- `runtime/` exists because of that alternate helper path, but upload requests currently save files into `uploads/`, not `runtime/`.
+- `scans.html` defines an `extra_head` block for auto-refresh intent, but `base.html` does not currently render that block. If you expect automatic refresh behavior, wire it through explicitly instead of assuming it works now.
+- Item edit/delete routes trust that `item_id` is a valid Mongo `ObjectId`. If you change route behavior around IDs, keep the Mongo conversion rules in mind.
+
+Feature implementation guidance
+
+- New page or route:
+  - add the route in `routes.py`
+  - add/update the template in `templates/`
+  - keep persistence logic out of the template and preferably out of large route bodies
+
+- New business/data logic:
+  - add it in `services.py`
+  - call it from routes
+  - add tests in `tests/test_services.py`
+
+- New auth-related behavior:
+  - put user creation/login/load changes in `auth.py`
+  - keep Flask-Login integration consistent with `User.get_id()`
+
+- New Mongo-backed feature:
+  - decide whether the data is user-owned
+  - if it is user-owned, store `user_id` and filter/update by `user_id`
+  - update route tests to cover access control and expected redirects
+
+- New UI work:
+  - extend `base.html`
+  - reuse current patterns from `dashboard.html`, `scans.html`, and `static/style.css`
+  - keep forms POST-based unless there is a deliberate architectural change
+
+- New ML-related fields:
+  - first confirm the ML service really produces them
+  - then map them in `save_detection_results_to_db()`
+  - then expose them in templates
+
+Testing / reset notes
+
+Install dependencies and run tests from `web-app/`:
+
+`pip install -r requirements.txt`
+`pytest`
+
+Useful existing test files:
+- `tests/test_routes.py`
+- `tests/test_services.py`
+- `tests/conftest.py`
+
+The older reset command is still useful for clearing the main UI-visible state:
+
+`python -c "from db import get_db; db = get_db(); db.inventory_items.delete_many({}); db.uploads.delete_many({}); print('cleared')"`
+
+If you also need to remove pending ML output state during debugging, you may need to clear `ml_results` separately:
+
+`python -c "from db import get_db; db = get_db(); db.ml_results.delete_many({}); print('cleared ml_results')"`
+
+Common issues / troubleshooting
+
+- Login/dashboard actions fail unexpectedly:
+  - verify `SECRET_KEY` is set and stable for the running process
+
+- Web app cannot reach MongoDB:
+  - check `MONGO_URI`
+  - for local runs, `mongodb://localhost:27017/` is usually correct
+  - for Docker Compose, the code defaults assume the service name `mongodb`
+
+- Upload succeeds locally but scan processing never finishes:
+  - confirm the ML service is running
+  - confirm `ML_SERVICE_URL` points to the actual ML service host/port
+  - check whether the ML service is writing `ml_results` and calling `/ml-callback`
+
+- Environment variables seem ignored:
+  - `config.py` loads `web-app/.env`
+  - for the active web app database name, set `DB_NAME`, not only `MONGO_DB_NAME`
+
+- If ML detection fails with missing ML packages:
+  - this is usually an issue in `machine-learning-client`, not in the Flask web layer
+  - make sure that subsystem�s environment is installed correctly and that `ml_client_service.py` starts successfully

@@ -59,44 +59,6 @@ def create_runtime_folders(task_id):
     return task_dir, input_dir, output_dir
 
 
-def run_ml_detection(uploaded_file_path):
-    task_id = uuid.uuid4().hex
-    _, input_dir, output_dir = create_runtime_folders(task_id)
-
-    runtime_input_path = input_dir / uploaded_file_path.name
-    shutil.copy(uploaded_file_path, runtime_input_path)
-
-    ml_base_dir = Config.BASE_DIR.parent / "machine-learning-client"
-    ml_script_path = ml_base_dir / "food_detection.py"
-    ml_python_path = ml_base_dir / "venv" / "bin" / "python"
-
-    command = [
-        str(ml_python_path),
-        str(ml_script_path),
-        "--input",
-        str(input_dir),
-        "--output",
-        str(output_dir),
-    ]
-
-    result = subprocess.run(  # pylint: disable=subprocess-run-check
-        command,
-        capture_output=True,
-        text=True,
-    )
-
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"ML detection failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-
-    json_path = output_dir / "detection_results.json"
-    if not json_path.exists():
-        raise FileNotFoundError("detection_results.json was not generated.")
-
-    return task_id, output_dir, json_path
-
-
 def save_detection_results_to_db(task_id):
     db = get_db()
 

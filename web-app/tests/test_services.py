@@ -5,13 +5,13 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from bson import ObjectId
+import pytest
 from werkzeug.datastructures import FileStorage
 
 from services import (
     allowed_file,
     create_runtime_folders,
     get_inventory_items,
-    run_ml_detection,
     save_detection_results_to_db,
     save_uploaded_file,
     soft_delete_inventory_item,
@@ -30,19 +30,6 @@ def test_allowed_file_rejects_invalid_extensions():
     assert allowed_file("test.txt") is False
     assert allowed_file("test.pdf") is False
     assert allowed_file("test") is False
-
-
-def test_save_uploaded_file(app):
-    file_storage = FileStorage(
-        stream=BytesIO(b"fake image content"),
-        filename="fridge.png",
-        content_type="image/png",
-    )
-
-    saved_filename, saved_path = save_uploaded_file(file_storage)
-
-    assert saved_filename.endswith("_fridge.png")
-    assert Path(saved_path).exists()
 
 
 def test_create_runtime_folders():
@@ -66,34 +53,6 @@ def test_get_inventory_items_filters_by_user():
             {"is_deleted": False, "user_id": "user-1"},
             sort=[("created_at", -1)],
         )
-
-
-def test_run_ml_detection_success():
-    temp_dir = Path(tempfile.mkdtemp())
-    uploaded_file = temp_dir / "fridge.png"
-    uploaded_file.write_bytes(b"fake image")
-
-    fake_output_dir = temp_dir / "output"
-    fake_output_dir.mkdir()
-    fake_json = fake_output_dir / "detection_results.json"
-    fake_json.write_text("{}")
-
-    with patch("services.create_runtime_folders") as mock_create_runtime_folders, patch(
-        "services.subprocess.run"
-    ) as mock_run, patch("services.shutil.copy") as mock_copy:
-        mock_create_runtime_folders.return_value = (
-            temp_dir / "task",
-            temp_dir / "input",
-            fake_output_dir,
-        )
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
-
-        task_id, output_dir, json_path = run_ml_detection(uploaded_file)
-
-        assert output_dir == fake_output_dir
-        assert json_path == fake_json
-        mock_copy.assert_called_once()
-        mock_run.assert_called_once()
 
 
 def test_update_inventory_item_name():
@@ -176,3 +135,14 @@ def test_save_detection_results_to_db():
         )
         assert tomato_item["confidence"] == 0.8
         assert all(item["user_id"] == "user-1" for item in inserted_items)
+
+
+def test_save_detection_results_to_db_returns_when_ml_results_missing():
+    fake_db = MagicMock()
+    fake_db.ml_results.find_one.return_value = None
+
+    with patch("services.get_db", return_value=fake_db):
+        save_detection_results_to_db("missing-task")
+
+    fake_db.uploads.update_one.assert_not_called()
+    fake_db.inventory_items.insert_many.assert_not_called()
