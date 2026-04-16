@@ -79,7 +79,9 @@ def test_run_posts_failed_callback_when_json_is_invalid(tmp_path):
     callback_payload = mock_post.call_args.kwargs["json"]
     assert callback_payload["task_id"] == "task-3"
     assert callback_payload["status"] == "failed"
-    assert "Expecting property name enclosed in double quotes" in callback_payload["error"]
+    assert (
+        "Expecting property name enclosed in double quotes" in callback_payload["error"]
+    )
 
 
 def test_receive_task_starts_background_thread_and_returns_accepted():
@@ -91,7 +93,9 @@ def test_receive_task_starts_background_thread_and_returns_accepted():
         "image_b64": base64.b64encode(b"image-bytes").decode(),
     }
 
-    with patch("ml_client_service.threading.Thread", return_value=thread_instance) as mock_thread:
+    with patch(
+        "ml_client_service.threading.Thread", return_value=thread_instance
+    ) as mock_thread:
         response = client.post("/task", json=payload)
 
     assert response.status_code == 202

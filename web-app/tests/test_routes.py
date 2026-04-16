@@ -146,7 +146,8 @@ def test_register_route_success(client, user_document):
 
 def test_register_route_failure(client):
     with patch(
-        "routes.create_user", return_value=(None, "An account with that email already exists.")
+        "routes.create_user",
+        return_value=(None, "An account with that email already exists."),
     ):
         response = client.post(
             "/register",
