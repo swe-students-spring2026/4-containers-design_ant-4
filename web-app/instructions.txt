@@ -313,4 +313,4 @@ Common issues / troubleshooting
 
 - If ML detection fails with missing ML packages:
   - this is usually an issue in `machine-learning-client`, not in the Flask web layer
-  - make sure that subsystem’s environment is installed correctly and that `ml_client_service.py` starts successfully
+  - make sure that subsystemï¿½s environment is installed correctly and that `ml_client_service.py` starts successfully

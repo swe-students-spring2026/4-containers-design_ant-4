@@ -38,22 +38,13 @@ git clone https://github.com/swe-students-spring2026/4-containers-design_ant-4.g
 cd 4-containers-design_ant-4
 ```
 
-### 2. Configure environment
-
-Copy the example environment file into both subsystems that need it:
-
-```bash
-cp env.example web-app/.env
-cp env.example machine-learning-client/.env
-```
-
-Edit the `.env` files if you need to change any defaults. See `env.example` for the available variables.
-
-### 3. Run with Docker Compose
+### 2. Run with Docker Compose
 
 ```bash
 docker-compose up --build
 ```
+
+All services use sensible defaults and connect to each other via Docker service names automatically — no configuration files needed.
 
 Once all containers are running:
 
@@ -62,7 +53,7 @@ Once all containers are running:
 
 ### Running locally (without Docker)
 
-If you prefer to run each part outside of Docker:
+If you prefer to run each part outside of Docker, you need to override `MONGO_URI` so the services point at localhost instead of the Docker service name.
 
 **Start MongoDB:**
 
@@ -77,7 +68,7 @@ cd machine-learning-client
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-python ml_client_service.py
+MONGO_URI=mongodb://localhost:27017/ python ml_client_service.py
 ```
 
 **Start the Web App** (in a separate terminal):
@@ -85,10 +76,8 @@ python ml_client_service.py
 ```bash
 cd web-app
 pip install -r requirements.txt
-flask run --host=0.0.0.0 --port=5000
+MONGO_URI=mongodb://localhost:27017/ flask run --host=0.0.0.0 --port=5000
 ```
-
-When running locally, make sure the `MONGO_URI` in your `.env` files points to `mongodb://localhost:27017/` instead of the Docker service name.
 
 ## Usage
 
