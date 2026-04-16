@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Fridge Food Detector{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="app-shell">
+        <header class="site-frame" aria-label="System header">
+            <div class="mark-box" aria-hidden="true">
+                <span class="mark-ring mark-ring-outer"></span>
+                <span class="mark-ring mark-ring-middle"></span>
+                <span class="mark-ring mark-ring-inner"></span>
+                <span class="mark-axis mark-axis-horizontal"></span>
+                <span class="mark-axis mark-axis-vertical"></span>
+            </div>
+            <div class="site-frame-copy">
+                <p class="micro-copy micro-copy-italic">What is in my fridge??</p>
+                <p class="system-name">BETTER FRIDGE PROTOTYPE</p>
+            </div>
+        </header>
+
+        <main>
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
