@@ -526,6 +526,59 @@ class TestRunDetection:
             # format is f"{d['confidence']:.2%}" -> "75.00%"
             assert "75.00%" in report
 
+    def test_run_detection_multiple_images_with_transformers_backend(self, tmp_path):
+        from food_detection import run_detection
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "a.jpg").write_bytes(b"fake-a")
+        (input_dir / "b.png").write_bytes(b"fake-b")
+
+        args = Namespace(
+            input=str(input_dir),
+            output=str(tmp_path / "output"),
+            classes="apple.",
+            box_thresh=0.35,
+            text_thresh=0.25,
+            device="cpu",
+            save_crop=False,
+        )
+        fake_image = np.zeros((200, 200, 3), dtype=np.uint8)
+        detect_results = [
+            (
+                [
+                    {
+                        "class_name": "apple",
+                        "confidence": 0.9,
+                        "bbox_xyxy": [10, 10, 50, 50],
+                    }
+                ],
+                fake_image,
+            ),
+            ([], fake_image),
+        ]
+
+        mock_model = MagicMock()
+        with patch(
+            "food_detection.load_model", return_value=(mock_model, "transformers")
+        ), patch(
+            "food_detection.detect_transformers", side_effect=detect_results
+        ) as mock_detect, patch(
+            "food_detection.draw_detections", return_value=fake_image
+        ), patch(
+            "food_detection.cv2.imwrite"
+        ):
+            run_detection(args)
+
+        assert mock_detect.call_count == 2
+        assert mock_detect.call_args_list[0].args[2] == "apple."
+        output_dir = Path(args.output)
+        with open(output_dir / "detection_results.json", encoding="utf-8") as f:
+            data = json.load(f)
+        assert data["backend"] == "transformers"
+        assert data["total_images"] == 2
+        assert data["total_detections"] == 1
+
 
 class TestConstants:
     def test_default_food_classes_not_empty(self):
