@@ -10,6 +10,7 @@ from werkzeug.datastructures import FileStorage
 from services import (
     allowed_file,
     create_runtime_folders,
+    get_inventory_items,
     run_ml_detection,
     save_detection_results_to_db,
     save_uploaded_file,
@@ -55,6 +56,18 @@ def test_create_runtime_folders():
         assert output_dir.exists()
 
 
+def test_get_inventory_items_filters_by_user():
+    fake_db = MagicMock()
+
+    with patch("services.get_db", return_value=fake_db):
+        get_inventory_items("user-1")
+
+        fake_db.inventory_items.find.assert_called_once_with(
+            {"is_deleted": False, "user_id": "user-1"},
+            sort=[("created_at", -1)],
+        )
+
+
 def test_run_ml_detection_success():
     temp_dir = Path(tempfile.mkdtemp())
     uploaded_file = temp_dir / "fridge.png"
@@ -88,11 +101,12 @@ def test_update_inventory_item_name():
 
     with patch("services.get_db", return_value=fake_db):
         item_id = str(ObjectId())
-        update_inventory_item_name(item_id, "green cucumber")
+        update_inventory_item_name(item_id, "green cucumber", "user-1")
 
         fake_db.inventory_items.update_one.assert_called_once()
         args, kwargs = fake_db.inventory_items.update_one.call_args
         assert args[0]["_id"] == ObjectId(item_id)
+        assert args[0]["user_id"] == "user-1"
         assert args[1]["$set"]["display_name"] == "green cucumber"
         assert isinstance(args[1]["$set"]["updated_at"], datetime)
 
@@ -102,11 +116,12 @@ def test_soft_delete_inventory_item():
 
     with patch("services.get_db", return_value=fake_db):
         item_id = str(ObjectId())
-        soft_delete_inventory_item(item_id)
+        soft_delete_inventory_item(item_id, "user-1")
 
         fake_db.inventory_items.update_one.assert_called_once()
         args, kwargs = fake_db.inventory_items.update_one.call_args
         assert args[0]["_id"] == ObjectId(item_id)
+        assert args[0]["user_id"] == "user-1"
         assert args[1]["$set"]["is_deleted"] is True
         assert isinstance(args[1]["$set"]["updated_at"], datetime)
 
@@ -142,6 +157,7 @@ def test_save_detection_results_to_db():
             ],
         },
     }
+    fake_db.uploads.find_one.return_value = {"task_id": "task123", "user_id": "user-1"}
 
     with patch("services.get_db", return_value=fake_db):
         save_detection_results_to_db("task123")
@@ -159,3 +175,4 @@ def test_save_detection_results_to_db():
             item for item in inserted_items if item["original_name"] == "tomato"
         )
         assert tomato_item["confidence"] == 0.8
+        assert all(item["user_id"] == "user-1" for item in inserted_items)
